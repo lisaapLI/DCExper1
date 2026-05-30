@@ -1,0 +1,43 @@
+# =========================
+# FRONTEND (React)
+# =========================
+quizml-frontend/node_modules/
+quizml-frontend/dist/
+quizml-frontend/build/
+quizml-frontend/.vite/
+quizml-frontend/.env
+
+# =========================
+# BACKEND (Python)
+# =========================
+quizml-backend/venv/
+quizml-backend/env/
+quizml-backend/.venv/
+quizml-backend/__pycache__/
+quizml-backend/*.pyc
+quizml-backend/.env
+
+# =========================
+# DATABASE
+# =========================
+*.sql
+*.sqlite3
+*.db
+
+# =========================
+# MACHINE LEARNING
+# =========================
+quizml-backend/models/
+quizml-backend/datasets/
+*.h5
+*.pt
+*.pth
+*.pkl
+
+# =========================
+# GENERAL
+# =========================
+quizml-frontend/.vscode/
+.idea/
+.DS_Store
+Thumbs.db

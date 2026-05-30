@@ -1,0 +1,8 @@
+Flask==3.0.3
+Flask-CORS==4.0.1
+flask-mysqldb==2.0.0
+scikit-learn==1.5.1
+numpy==1.26.4
+pandas==2.2.2
+python-dotenv==1.0.1
+marshmallow==3.21.3
