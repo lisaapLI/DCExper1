@@ -10,8 +10,8 @@ Platform kuis adaptif berbasis **K-Means Clustering** untuk menganalisis kemampu
 
 Eureka Quiz adalah web aplikasi kuis Kalkulus yang menggunakan Machine Learning untuk:
 - Mengelompokkan kemampuan mahasiswa secara otomatis (**K-Means Clustering**)
-- Menganalisis materi mana yang paling lemah
-- Memberikan **rekomendasi belajar personal** berdasarkan hasil analisis
+- Menganalisis materi mana yang paling lemah beserta analisis deskriptif per sub-materi
+- Memberikan **rekomendasi belajar personal** berdasarkan hasil analisis (YouTube, artikel, buku teks)
 
 ---
 
@@ -23,6 +23,8 @@ Eureka Quiz adalah web aplikasi kuis Kalkulus yang menggunakan Machine Learning 
 | Backend | Flask (Python) REST API |
 | Database | MySQL |
 | Machine Learning | Scikit-learn (K-Means Clustering) |
+| Hosting Frontend | Vercel |
+| Hosting Backend | Railway |
 
 ---
 
@@ -33,7 +35,7 @@ DCExper1/
 ├── quizml-frontend/        # React + Vite + Tailwind
 │   └── src/
 │       ├── pages/          # LoginPage, RegisterPage, DashboardPage, QuizPage, ResultPage
-│       ├── components/     # RadarChart, CategoryBadge, ProgressBar
+│       ├── components/     # CategoryBadge, ProgressBar
 │       ├── hooks/          # useQuiz.js
 │       └── api/            # quizApi.js
 ├── quizml-backend/         # Flask REST API
@@ -55,17 +57,18 @@ DCExper1/
 
 ### Dataset
 - **600 data** hasil kuis mahasiswa (sintetis realistis)
-- **6 fitur clustering**: limit_score, turunan_score, aplikasi_turunan_score, integral_tentu_score, teknik_integrasi_score, integral_lipat_score
+- **6 fitur clustering**: `limit_score`, `turunan_score`, `aplikasi_turunan_score`, `integral_tentu_score`, `teknik_integrasi_score`, `integral_lipat_score`
 - Korelasi antar sub-topik ~0.6 (realistis, tidak multikolinear)
 - File terpisah: `_clustering_ready.csv` (untuk fit model) dan `_full.csv` (untuk validasi)
 
 ### Pipeline K-Means
+
 | Tahap | Detail |
 |---|---|
 | Preprocessing | StandardScaler |
 | Evaluasi K | Elbow Method + Silhouette Score + Davies-Bouldin Index |
 | K Optimal | k=3 (Rendah / Sedang / Tinggi) |
-| Parameter | n_init=10, random_state=42 |
+| Parameter | `n_init=10`, `random_state=42` |
 | Label | Dinamis berdasarkan rata-rata centroid |
 
 ### Hasil Benchmarking
@@ -78,20 +81,21 @@ DCExper1/
 | 5 | 1185.7 | 0.176 | 1.718 |
 
 ### Kategori Kemampuan
-- 🟥 **Rendah** — skor sub-topik rendah, butuh materi remedial
-- 🟨 **Sedang** — skor menengah, butuh penguatan
-- 🟩 **Tinggi** — skor tinggi, butuh pengayaan
+- 🔴 **Rendah** — skor sub-topik rendah, butuh materi remedial
+- 🟡 **Sedang** — skor menengah, butuh penguatan
+- 🟢 **Tinggi** — skor tinggi, butuh pengayaan
 
 ---
 
-## 🚀 Cara Menjalankan
+## 🚀 Cara Menjalankan (Lokal)
 
 ### Prasyarat
 - Python 3.10+
 - Node.js 18+
-- XAMPP (MySQL)
+- XAMPP (MySQL) atau Railway MySQL
 
 ### 1. Setup Database
+
 ```bash
 # Buka phpMyAdmin → buat database 'quiz'
 # Import file SQL berurutan:
@@ -101,6 +105,7 @@ database/update_questions.sql
 ```
 
 ### 2. Setup Backend
+
 ```bash
 cd quizml-backend/backend
 
@@ -125,6 +130,7 @@ python app.py
 ```
 
 ### 3. Setup Frontend
+
 ```bash
 cd quizml-frontend
 npm install
@@ -132,20 +138,21 @@ npm run dev
 ```
 
 ### 4. Buka Aplikasi
+
 ```
 http://localhost:5173
 ```
 
 ---
 
-## 🔌 REST API Endpoints
+## 📌 REST API Endpoints
 
 | Method | Endpoint | Fungsi |
 |---|---|---|
 | POST | `/api/auth/register` | Daftar akun |
 | POST | `/api/auth/login` | Login |
 | GET | `/api/auth/history/:nim` | Riwayat quiz |
-| GET | `/api/quiz/questions?level=Mudah` | Ambil soal per level |
+| GET | `/api/quiz/questions?level=Mudah` | Ambil soal acak per level |
 | POST | `/api/quiz/submit` | Submit + analisis ML |
 | GET | `/api/health` | Cek status server |
 
@@ -155,12 +162,12 @@ http://localhost:5173
 
 - ✅ Register & Login mahasiswa
 - ✅ Quiz 3 level: Mudah / Sedang / Sulit
-- ✅ 20 soal acak per sesi (`ORDER BY RAND()`)
-- ✅ Analisis skor per materi dan per level kesulitan
-- ✅ Kategorisasi kemampuan dengan K-Means (Rendah/Sedang/Tinggi)
-- ✅ Rekomendasi belajar berbasis rule
-- ✅ Radar chart visualisasi penguasaan materi
-- ✅ Riwayat quiz tersimpan
+- ✅ Soal diacak setiap sesi (`ORDER BY RAND()`)
+- ✅ Analisis skor per materi dan per tingkat kesulitan
+- ✅ Analisis deskriptif per materi (penjelasan kelemahan spesifik)
+- ✅ Kategorisasi kemampuan dengan K-Means (Rendah / Sedang / Tinggi)
+- ✅ Rekomendasi belajar berbasis rule (YouTube terverifikasi, Paul's Notes, LibreTexts, MIT OCW)
+- ✅ Riwayat quiz tersimpan di dashboard
 
 ---
 

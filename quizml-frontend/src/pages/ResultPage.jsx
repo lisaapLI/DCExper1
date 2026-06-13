@@ -1,38 +1,60 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import CategoryBadge from "../components/CategoryBadge";
-import ProgressBar from "../components/ProgressBar";
-import MateriRadarChart from "../components/RadarChart";
-import {
-  MATERI_COLORS,
-  MATERI_BAR_COLOR,
-  KESULITAN_COLORS,
-  KATEGORI_CONFIG,
-  TIPE_ICONS,
-} from "../utils/formatters";
 
-const LEVEL_ACCENT = {
-  Mudah: { bg: "bg-primary", label: "🌱 MUDAH" },
-  Sedang: { bg: "bg-secondary", label: "⚡ SEDANG" },
-  Sulit: { bg: "bg-tertiary-container", label: "🔥 SULIT" },
+const MATERI_HEX = {
+  "Limit":              "#1D6FA4",
+  "Turunan":            "#6D28D9",
+  "Aplikasi Turunan":   "#047857",
+  "Integral Tentu":     "#0F766E",
+  "Teknik Integrasi":   "#B45309",
+  "Integral Lipat":     "#BE123C",
+};
+
+const TIPE_ICON = {
+  "Video":   "▶",
+  "Artikel": "📄",
+  "Latihan": "✏️",
+  "Buku":    "📚",
+};
+
+const TIPE_COLOR = {
+  "Video":   { bg: "#EFF6FF", color: "#1D4ED8", border: "#BFDBFE" },
+  "Artikel": { bg: "#F0FDF4", color: "#166534", border: "#BBF7D0" },
+  "Latihan": { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" },
+  "Buku":    { bg: "#FAF5FF", color: "#7E22CE", border: "#E9D5FF" },
+};
+
+const LEVEL_PILL = {
+  Mudah:  { bg: "#D1FAE5", color: "#065F46", border: "#6EE7B7" },
+  Sedang: { bg: "#FEF3C7", color: "#92400E", border: "#FCD34D" },
+  Sulit:  { bg: "#FFE4E6", color: "#9F1239", border: "#FCA5A5" },
+};
+
+const KATEGORI = {
+  Beginner:     { icon: "📚", bg: "#FEF9C3", border: "#FDE68A", color: "#92400E" },
+  Intermediate: { icon: "⚡", bg: "#EDE9FE", border: "#C4B5FD", color: "#5B21B6" },
+  Advanced:     { icon: "🏆", bg: "#D1FAE5", border: "#6EE7B7", color: "#065F46" },
+  Rendah:       { icon: "📚", bg: "#FEF9C3", border: "#FDE68A", color: "#92400E" },
+};
+
+const LABEL_COLOR = {
+  "Sangat Lemah": { bg: "#FFE4E6", color: "#9F1239", border: "#FCA5A5" },
+  "Lemah":        { bg: "#FEE2E2", color: "#B91C1C", border: "#FCA5A5" },
+  "Cukup":        { bg: "#FEF3C7", color: "#92400E", border: "#FCD34D" },
+  "Baik":         { bg: "#D1FAE5", color: "#065F46", border: "#6EE7B7" },
+  "Sangat Baik":  { bg: "#DCFCE7", color: "#14532D", border: "#86EFAC" },
 };
 
 const formatWaktu = (detik) => {
   if (!detik) return "-";
-  const m = Math.floor(detik / 60);
-  const s = detik % 60;
-  return `${m}m ${s}s`;
+  return `${Math.floor(detik / 60)}m ${detik % 60}s`;
 };
 
-// Simpan history ke localStorage — dipanggil sekali saat result tiba
 function saveToHistory(r, s) {
   try {
-    // Buat unique key per sesi quiz ini menggunakan session_id dari backend
-    const savedFlag = `quizml_saved_${r.session_id || r.result_id}`;
-    if (localStorage.getItem(savedFlag)) return; // sudah pernah disimpan
-
-    localStorage.setItem(savedFlag, "1"); // tandai sudah disimpan
-
+    const flag = `quizml_saved_${r.session_id || r.result_id}`;
+    if (localStorage.getItem(flag)) return;
+    localStorage.setItem(flag, "1");
     const entry = {
       level: r.level || "Mudah",
       total_score: r.total_score,
@@ -43,14 +65,29 @@ function saveToHistory(r, s) {
       waktu: formatWaktu(r.waktu_detik),
       timestamp: new Date().toLocaleString("id-ID"),
     };
+    const key = `quizml_history_${s.nim}`;
+    const prev = JSON.parse(localStorage.getItem(key) || "[]");
+    prev.push(entry);
+    localStorage.setItem(key, JSON.stringify(prev));
+  } catch (e) { console.error(e); }
+}
 
-    const storageKey = `quizml_history_${s.nim}`;
-    const existing = JSON.parse(localStorage.getItem(storageKey) || "[]");
-    existing.push(entry);
-    localStorage.setItem(storageKey, JSON.stringify(existing));
-  } catch (e) {
-    console.error("saveToHistory error:", e);
-  }
+function MateriBar({ label, value, hex }) {
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+        <span style={{ fontSize:13, fontWeight:700, color:"#292524" }}>{label}</span>
+        <span style={{ fontSize:13, fontWeight:800, color: hex }}>{Math.round(value)}%</span>
+      </div>
+      <div style={{ height:10, borderRadius:99, background:"#EDE8E3", overflow:"hidden" }}>
+        <div style={{
+          height:"100%", width:`${Math.min(value,100)}%`,
+          background: hex, borderRadius:99,
+          transition:"width 0.6s cubic-bezier(.4,0,.2,1)",
+        }}/>
+      </div>
+    </div>
+  );
 }
 
 export default function ResultPage() {
@@ -58,219 +95,150 @@ export default function ResultPage() {
   const [result, setResult] = useState(null);
   const [student, setStudent] = useState(null);
   const [ready, setReady] = useState(false);
+  const [expandedMateri, setExpandedMateri] = useState({});
 
   useEffect(() => {
     try {
       const r = JSON.parse(sessionStorage.getItem("quizml_result") || "null");
       const s = JSON.parse(sessionStorage.getItem("quizml_user") || "null");
-      if (!r || !s) {
-        navigate("/");
-        return;
-      }
-
-      setResult(r);
-      setStudent(s);
-      saveToHistory(r, s); // simpan ke localStorage dengan guard flag
-    } catch (e) {
-      console.error("ResultPage error:", e);
-      navigate("/");
-    } finally {
-      setReady(true);
-    }
+      if (!r || !s) { navigate("/"); return; }
+      setResult(r); setStudent(s);
+      saveToHistory(r, s);
+    } catch (e) { navigate("/"); }
+    finally { setReady(true); }
   }, []);
 
-  if (!ready)
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex gap-2">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="w-4 h-4 bg-primary border-2 border-black animate-bounce-dot"
-              style={{ animationDelay: `${i * 0.16}s` }}
-            />
-          ))}
-        </div>
+  if (!ready) return (
+    <div style={{ minHeight:"100vh", background:"#FFF8F2", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Inter',sans-serif" }}>
+      <div style={{ display:"flex", gap:8 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{
+            width:10, height:10, borderRadius:"50%", background:"#F97316",
+            animation:"bx 0.6s infinite alternate",
+            animationDelay:`${i*0.15}s`,
+          }}/>
+        ))}
       </div>
-    );
+      <style>{`@keyframes bx{from{transform:translateY(0)}to{transform:translateY(-10px)}}`}</style>
+    </div>
+  );
 
   if (!result || !student) return null;
 
   const {
-    nama,
-    nim,
-    total_score,
-    jumlah_benar,
-    jumlah_salah,
-    total_soal,
-    level,
-    materi_scores,
-    kesulitan_scores,
-    materi_terlemah,
-    kategori_kemampuan,
-    rekomendasi,
-    ringkasan,
+    total_score, jumlah_benar, jumlah_salah, total_soal,
+    level, materi_scores, kesulitan_scores, materi_terlemah,
+    kategori_kemampuan, rekomendasi, ringkasan, analisis_detail,
   } = result;
 
-  const kategoriCfg =
-    KATEGORI_CONFIG[kategori_kemampuan] || KATEGORI_CONFIG["Beginner"];
-  const rekList = Object.entries(rekomendasi || {});
-  const lvAccent = LEVEL_ACCENT[level] || LEVEL_ACCENT["Mudah"];
+  const kat    = KATEGORI[kategori_kemampuan] || KATEGORI.Beginner;
+  const lvPill = LEVEL_PILL[level] || LEVEL_PILL.Mudah;
 
-  const scoreLabel =
-    total_score >= 80
-      ? "Bagus Sekali!"
-      : total_score >= 60
-        ? "Cukup Baik!"
-        : "Perlu Belajar!";
+  // rekomendasi sudah flat list dari backend
+  const rekList = Array.isArray(rekomendasi) ? rekomendasi : [];
 
-  const heroAccent =
-    total_score >= 80
-      ? "bg-secondary"
-      : total_score >= 60
-        ? "bg-primary-container"
-        : "bg-tertiary-container";
+  const scoreGrade =
+    total_score >= 80 ? { color:"#065F46", bg:"#D1FAE5", border:"#6EE7B7", label:"Bagus Sekali! 🎉" } :
+    total_score >= 60 ? { color:"#92400E", bg:"#FEF3C7", border:"#FCD34D", label:"Cukup Baik! 💪" } :
+                        { color:"#9F1239", bg:"#FFE4E6", border:"#FCA5A5", label:"Ayo Semangat! 📚" };
 
-  const handleRetry = () => {
-    sessionStorage.removeItem("quizml_result");
-    navigate("/quiz", { state: { level } });
-  };
+  const handleRetry     = () => { sessionStorage.removeItem("quizml_result"); navigate("/quiz", { state: { level } }); };
+  const handleDashboard = () => { sessionStorage.removeItem("quizml_result"); navigate("/dashboard"); };
+  const toggleMateri    = (m) => setExpandedMateri(prev => ({ ...prev, [m]: !prev[m] }));
 
-  const handleDashboard = () => {
-    sessionStorage.removeItem("quizml_result");
-    navigate("/dashboard");
-  };
+  const O = "#F97316", OD = "#EA580C";
+  const card = (extra = {}) => ({
+    background:"#FFFCF9", border:"1.5px solid #F0E6DA",
+    borderRadius:18, padding:24,
+    boxShadow:"0 2px 16px rgba(249,115,22,0.07)", ...extra,
+  });
+  const tTitle = { fontSize:15, fontWeight:700, color:"#1C1917" };
 
   return (
-    <div className="min-h-screen bg-background text-on-surface">
+    <div style={{ minHeight:"100vh", background:"#FFF8F2", fontFamily:"'Inter',sans-serif", color:"#1C1917" }}>
+
       {/* TopNav */}
-      <nav
-        className="w-full sticky top-0 z-50 border-b-4 border-black bg-surface flex justify-between
-        items-center px-margin-mobile md:px-margin-desktop py-md shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-      >
-        <div className="font-display text-headline-md font-black text-primary tracking-tight uppercase">
-          Eureka Quiz
-        </div>
-        <div className="flex items-center gap-3">
-          <div
-            className={`${lvAccent.bg} text-black border-[2px] border-black px-3 py-1
-            font-label-sm text-label-sm font-black neo-shadow-sm`}
-          >
-            {lvAccent.label}
-          </div>
-          <button
-            onClick={handleDashboard}
-            className="neo-btn bg-surface-variant text-on-surface border-[3px] border-black px-4 py-1.5
-              font-label-mono text-label-sm font-black uppercase neo-shadow-sm"
-            style={{ borderRadius: 0 }}
-          >
-            ← Dashboard
-          </button>
+      <nav style={{
+        position:"sticky", top:0, zIndex:50, background:"#FFFCF9",
+        borderBottom:"1.5px solid #F0E6DA",
+        boxShadow:"0 2px 8px rgba(249,115,22,0.08)",
+        padding:"10px 32px", display:"flex", alignItems:"center", justifyContent:"space-between",
+      }}>
+        <span style={{ fontSize:18, fontWeight:800, letterSpacing:"-0.4px", color:"#1C1917" }}>🎓 Eureka Quiz</span>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <span style={{
+            background:lvPill.bg, color:lvPill.color,
+            border:`1.5px solid ${lvPill.border}`,
+            borderRadius:20, padding:"3px 14px", fontSize:12, fontWeight:700,
+          }}>{level}</span>
+          <button onClick={handleDashboard} style={{
+            background:"#FFF7ED", color:OD, border:`1.5px solid #FED7AA`,
+            borderRadius:10, padding:"7px 18px", fontSize:13, fontWeight:700,
+            cursor:"pointer", fontFamily:"inherit",
+          }}>← Dashboard</button>
         </div>
       </nav>
 
-      <main className="max-w-6xl mx-auto px-margin-mobile md:px-margin-desktop py-xl space-y-xl">
-        {/* Score Hero */}
-        <section className="grid grid-cols-1 md:grid-cols-12 gap-lg items-stretch animate-fade-up">
-          <div
-            className={`md:col-span-8 ${heroAccent} border-[3px] border-black neo-shadow-xl p-xl
-            relative overflow-hidden flex flex-col justify-center min-h-[280px]`}
-          >
-            <div className="relative z-10 space-y-md">
-              <div>
-                <h2 className="font-display text-display text-black leading-none">
-                  {total_score}/100
-                </h2>
-                <p className="font-display text-headline-md text-black mt-xs">
-                  {scoreLabel}
-                </p>
-              </div>
-              <div>
-                <p className="font-label-mono text-label-mono text-black/60 bg-black/10 inline-block px-xs py-base border-2 border-black">
-                  NIM: {student.nim}
-                </p>
-                <h3 className="font-display text-headline-lg text-black mt-xs">
-                  {student.nama}
-                </h3>
-              </div>
+      <main style={{ maxWidth:1080, margin:"0 auto", padding:"28px 24px 64px" }}>
+
+        {/* Hero Score */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 200px", gap:20, marginBottom:24 }}>
+          <div style={{
+            background:scoreGrade.bg, border:`1.5px solid ${scoreGrade.border}`,
+            borderRadius:20, padding:"32px 36px",
+            boxShadow:"0 4px 24px rgba(0,0,0,0.06)", position:"relative", overflow:"hidden",
+          }}>
+            <div style={{ fontSize:11, fontWeight:700, color:scoreGrade.color, textTransform:"uppercase", letterSpacing:1.2, marginBottom:10 }}>
+              Hasil Quiz • Level {level}
             </div>
-            <div className="absolute -right-4 -bottom-4 text-[140px] opacity-20 select-none">
-              🤖
+            <div style={{ display:"flex", alignItems:"flex-end", gap:8, marginBottom:8 }}>
+              <span style={{ fontSize:80, fontWeight:900, color:scoreGrade.color, lineHeight:1 }}>{total_score}</span>
+              <span style={{ fontSize:26, color:`${scoreGrade.color}99`, marginBottom:10 }}>/100</span>
             </div>
+            <div style={{ fontSize:20, fontWeight:700, color:"#1C1917", marginBottom:16 }}>{scoreGrade.label}</div>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+              <div style={{ background:"rgba(255,255,255,0.7)", borderRadius:10, padding:"5px 14px", border:"1px solid rgba(0,0,0,0.08)" }}>
+                <span style={{ fontSize:11, color:"#78716C", fontFamily:"monospace" }}>NIM: {student.nim}</span>
+              </div>
+              <span style={{ fontSize:16, fontWeight:700 }}>{student.nama}</span>
+            </div>
+            <div style={{ position:"absolute", right:16, bottom:-12, fontSize:110, opacity:0.08, userSelect:"none" }}>🤖</div>
           </div>
 
-          <div className="md:col-span-4 flex flex-col gap-md">
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             {[
-              {
-                label: "Benar",
-                value: jumlah_benar,
-                bg: "bg-primary",
-                icon: "check_circle",
-              },
-              {
-                label: "Salah",
-                value: jumlah_salah,
-                bg: "bg-error",
-                icon: "cancel",
-              },
-              {
-                label: "Total Soal",
-                value: total_soal,
-                bg: "bg-tertiary-container",
-                icon: "quiz",
-              },
-            ].map((s) => (
-              <div
-                key={s.label}
-                className={`${s.bg} border-[3px] border-black neo-shadow p-md flex items-center justify-between`}
-              >
-                <div>
-                  <p className="font-label-mono text-label-mono text-black/70">
-                    {s.label}
-                  </p>
-                  <h4 className="font-display text-headline-lg text-black">
-                    {s.value}
-                  </h4>
-                </div>
-                <span
-                  className="material-symbols-outlined text-headline-lg text-black"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  {s.icon}
-                </span>
+              { label:"Benar",      value:jumlah_benar, bg:"#D1FAE5", color:"#065F46", border:"#6EE7B7" },
+              { label:"Salah",      value:jumlah_salah, bg:"#FFE4E6", color:"#9F1239", border:"#FCA5A5" },
+              { label:"Total Soal", value:total_soal,   bg:"#FEF3C7", color:"#92400E", border:"#FCD34D" },
+            ].map(st => (
+              <div key={st.label} style={{
+                background:st.bg, border:`1.5px solid ${st.border}`,
+                borderRadius:14, padding:"10px 16px", flex:1,
+                boxShadow:"0 2px 8px rgba(0,0,0,0.04)",
+              }}>
+                <div style={{ fontSize:10, color:st.color, fontWeight:700, textTransform:"uppercase", letterSpacing:0.8 }}>{st.label}</div>
+                <div style={{ fontSize:34, fontWeight:900, color:st.color, lineHeight:1.2 }}>{st.value}</div>
               </div>
             ))}
           </div>
-        </section>
+        </div>
 
-        {/* Analisis Kesulitan & Kategori */}
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-xl animate-fade-up animate-delay-100">
+        {/* Kesulitan + Kategori */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:24 }}>
           {kesulitan_scores && Object.keys(kesulitan_scores).length > 0 && (
-            <div className="bg-surface-container border-[3px] border-black p-lg space-y-lg neo-shadow">
-              <div className="flex items-center gap-xs">
-                <span className="material-symbols-outlined text-primary">
-                  bar_chart
-                </span>
-                <h3 className="font-display text-headline-md text-on-surface">
-                  Analisis Kesulitan
-                </h3>
-              </div>
-              <div className="grid grid-cols-3 gap-md">
+            <div style={card()}>
+              <div style={tTitle}>📊 Analisis Kesulitan</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginTop:16 }}>
                 {Object.entries(kesulitan_scores).map(([k, v]) => {
-                  const kc = KESULITAN_COLORS[k] || KESULITAN_COLORS["Sedang"];
+                  const c = k==="Mudah"
+                    ? { bg:"#D1FAE5", color:"#065F46", border:"#6EE7B7" }
+                    : k==="Sedang"
+                    ? { bg:"#FEF3C7", color:"#92400E", border:"#FCD34D" }
+                    : { bg:"#FFE4E6", color:"#9F1239", border:"#FCA5A5" };
                   return (
-                    <div
-                      key={k}
-                      className={`${kc.bg} border-[2px] border-black p-md text-center neo-shadow-sm`}
-                    >
-                      <p
-                        className={`font-label-mono text-label-mono ${kc.text} font-black uppercase`}
-                      >
-                        {k}
-                      </p>
-                      <h5 className="font-display text-headline-md text-black">
-                        {Math.round(v)}%
-                      </h5>
+                    <div key={k} style={{ background:c.bg, border:`1.5px solid ${c.border}`, borderRadius:12, padding:"14px 8px", textAlign:"center" }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:c.color, textTransform:"uppercase", letterSpacing:0.5 }}>{k}</div>
+                      <div style={{ fontSize:30, fontWeight:900, color:c.color }}>{Math.round(v)}%</div>
                     </div>
                   );
                 })}
@@ -278,172 +246,226 @@ export default function ResultPage() {
             </div>
           )}
 
-          <div className="bg-surface-container border-[3px] border-black p-lg space-y-lg neo-shadow">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-xs">
-                <span className="material-symbols-outlined text-secondary">
-                  psychology
-                </span>
-                <h3 className="font-display text-headline-md text-on-surface">
-                  Kategori Kemampuan
-                </h3>
-              </div>
-              <span className="font-label-mono text-label-sm bg-black text-on-surface px-xs py-1 border-2 border-black">
-                K-Means AI
-              </span>
+          <div style={card()}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+              <div style={tTitle}>🧠 Kategori Kemampuan</div>
+              <span style={{
+                background:`linear-gradient(135deg,${O},${OD})`, color:"#fff",
+                borderRadius:20, padding:"3px 12px", fontSize:11, fontWeight:700,
+              }}>K-Means AI</span>
             </div>
-            <div
-              className={`flex items-center gap-lg ${kategoriCfg.accent} border-[3px] border-black p-md neo-shadow-sm`}
-            >
-              <div className="text-5xl">{kategoriCfg.icon}</div>
+            <div style={{
+              background:kat.bg, border:`1.5px solid ${kat.border}`,
+              borderRadius:14, padding:"16px 20px",
+              display:"flex", alignItems:"center", gap:14,
+            }}>
+              <span style={{ fontSize:44 }}>{kat.icon}</span>
               <div>
-                <h4 className="font-display text-headline-md text-black">
-                  {kategori_kemampuan} Learner
-                </h4>
-                <p className="font-body-md text-body-md text-black/70">
-                  {ringkasan}
+                <div style={{ fontWeight:800, fontSize:18, color:kat.color }}>{kategori_kemampuan} Learner</div>
+                <div style={{ fontSize:13, color:"#44403C", marginTop:4, lineHeight:1.5 }}>{ringkasan || ""}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Penguasaan Materi + Analisis Deskriptif */}
+        {materi_scores && Object.keys(materi_scores).length > 0 && (
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:24 }}>
+
+            {/* Kiri: progress bar per materi */}
+            <div style={card()}>
+              <div style={tTitle}>📘 Penguasaan Materi</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:18, marginTop:18 }}>
+                {Object.entries(materi_scores).map(([materi, skor]) => {
+                  const hex    = MATERI_HEX[materi] || "#FBBF24";
+                  const detail = analisis_detail?.[materi];
+                  const lc     = LABEL_COLOR[detail?.label] || LABEL_COLOR["Cukup"];
+                  return (
+                    <div key={materi}>
+                      <MateriBar label={materi} value={skor} hex={hex} />
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:6, flexWrap:"wrap" }}>
+                        {detail?.label && (
+                          <span style={{
+                            background:lc.bg, color:lc.color, border:`1px solid ${lc.border}`,
+                            borderRadius:20, padding:"2px 10px", fontSize:10, fontWeight:700,
+                          }}>
+                            {detail.label}
+                          </span>
+                        )}
+                        {materi === materi_terlemah && (
+                          <span style={{
+                            background:"#FFE4E6", border:"1px solid #FCA5A5",
+                            borderRadius:20, padding:"2px 10px", fontSize:10, fontWeight:700, color:"#9F1239",
+                          }}>
+                            ⚠ Butuh Perhatian Ekstra
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Kanan: Analisis Deskriptif per materi */}
+            <div style={card()}>
+              <div style={tTitle}>🔍 Analisis Deskriptif</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:10, marginTop:16 }}>
+                {Object.entries(materi_scores).map(([materi, skor]) => {
+                  const hex    = MATERI_HEX[materi] || "#FBBF24";
+                  const detail = analisis_detail?.[materi];
+                  const isOpen = expandedMateri[materi];
+                  if (!detail) return null;
+                  return (
+                    <div key={materi} style={{
+                      border:`1.5px solid ${hex}22`,
+                      borderRadius:12, overflow:"hidden",
+                    }}>
+                      {/* Header accordion */}
+                      <button
+                        onClick={() => toggleMateri(materi)}
+                        style={{
+                          width:"100%", display:"flex", alignItems:"center",
+                          justifyContent:"space-between",
+                          background: isOpen ? `${hex}12` : "#FFFCF9",
+                          padding:"10px 14px", border:"none", cursor:"pointer",
+                          fontFamily:"inherit", borderBottom: isOpen ? `1px solid ${hex}22` : "none",
+                        }}
+                      >
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <div style={{ width:10, height:10, borderRadius:"50%", background:hex, flexShrink:0 }}/>
+                          <span style={{ fontSize:13, fontWeight:700, color:"#1C1917" }}>{materi}</span>
+                          <span style={{ fontSize:12, fontWeight:800, color:hex }}>{Math.round(skor)}%</span>
+                        </div>
+                        <span style={{ fontSize:12, color:"#78716C", transform: isOpen ? "rotate(180deg)" : "none", transition:"transform 0.2s" }}>
+                          ▼
+                        </span>
+                      </button>
+
+                      {/* Body accordion */}
+                      {isOpen && (
+                        <div style={{ padding:"12px 14px", background:"#FFFCF9" }}>
+                          <p style={{
+                            fontSize:12, color:"#44403C", margin:0,
+                            lineHeight:1.7,
+                          }}>
+                            {detail.analisis}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <p style={{ fontSize:11, color:"#A8956E", margin:"4px 0 0", fontStyle:"italic" }}>
+                  Klik materi untuk melihat analisis lengkap
                 </p>
               </div>
             </div>
           </div>
-        </section>
-
-        {/* Penguasaan Materi */}
-        {materi_scores && Object.keys(materi_scores).length > 0 && (
-          <section className="grid grid-cols-1 lg:grid-cols-12 gap-xl animate-fade-up animate-delay-200">
-            <div className="lg:col-span-7 bg-surface-container border-[3px] border-black p-lg space-y-lg neo-shadow">
-              <h3 className="font-display text-headline-md text-on-surface">
-                Penguasaan Materi
-              </h3>
-              <div className="space-y-lg">
-                {Object.entries(materi_scores).map(([materi, skor]) => (
-                  <div key={materi} className="space-y-xs">
-                    <ProgressBar
-                      value={skor}
-                      max={100}
-                      hexColor={MATERI_BAR_COLOR[materi] || "#b4ffec"}
-                      label={materi}
-                    />
-                    {materi === materi_terlemah && (
-                      <p className="text-error font-label-mono text-[10px] uppercase font-black">
-                        ⚠ BUTUH PERHATIAN EKSTRA
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="lg:col-span-5 bg-surface-container border-[3px] border-black p-lg flex flex-col neo-shadow">
-              <h3 className="font-display text-headline-md text-on-surface mb-xl">
-                Visual Kompetensi
-              </h3>
-              <div className="flex-1 flex items-center justify-center">
-                <MateriRadarChart scores={materi_scores} />
-              </div>
-            </div>
-          </section>
         )}
 
-        {/* Rekomendasi */}
+        {/* Rekomendasi Belajar */}
         {rekList.length > 0 && (
-          <section className="space-y-lg animate-fade-up animate-delay-300">
-            <div className="flex items-center gap-xs">
-              <span className="material-symbols-outlined text-tertiary-container">
-                rocket_launch
-              </span>
-              <h3 className="font-display text-headline-md text-on-surface">
-                Rekomendasi Belajar
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
-              {rekList.flatMap(([materi, rec]) =>
-                (rec.sumber || []).map((s, i) => (
-                  <div
-                    key={`${materi}-${i}`}
-                    className="neo-btn bg-surface-container border-[3px] border-black p-md flex flex-col h-full neo-shadow"
-                  >
-                    <div
-                      className="mb-md h-2 w-full"
-                      style={{
-                        background: MATERI_BAR_COLOR[materi] || "#b4ffec",
-                      }}
-                    />
-                    <span
-                      className="font-label-mono text-label-sm mb-xs"
-                      style={{ color: MATERI_BAR_COLOR[materi] }}
-                    >
-                      {TIPE_ICONS[s.tipe]} {s.tipe?.toUpperCase()}
-                    </span>
-                    <h5 className="font-display text-headline-md text-on-surface mb-xs leading-tight">
-                      {s.judul}
-                    </h5>
-                    <p className="font-body-md text-on-surface-variant flex-grow mb-md text-sm">
-                      {s.deskripsi}
-                    </p>
-                    {s.url ? (
-                      <a
-                        href={s.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-label-mono text-label-mono text-black px-md py-xs border-[2px] border-black
-                          text-center uppercase font-black block"
-                        style={{
-                          borderRadius: 0,
-                          background: MATERI_BAR_COLOR[materi] || "#b4ffec",
-                        }}
-                      >
-                        Buka Sumber →
-                      </a>
-                    ) : (
-                      <span
-                        className="font-label-mono text-label-mono bg-surface-container-high
-                        text-on-surface-variant px-md py-xs border-[2px] border-black text-center uppercase block"
-                      >
-                        Buku Referensi
-                      </span>
-                    )}
+          <div style={{ marginBottom:28 }}>
+            <div style={{ ...tTitle, marginBottom:8, fontSize:16 }}>🚀 Rekomendasi Belajar</div>
+            <p style={{ fontSize:13, color:"#78716C", marginBottom:16 }}>
+              Berdasarkan hasil analisis, berikut sumber belajar yang direkomendasikan:
+            </p>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+              {rekList.map((rec, i) => {
+                const hex  = MATERI_HEX[rec.materi] || "#FBBF24";
+                const tc   = TIPE_COLOR[rec.tipe] || TIPE_COLOR["Artikel"];
+                const icon = TIPE_ICON[rec.tipe] || "📄";
+                return (
+                  <div key={i} style={card({ padding:0, overflow:"hidden", display:"flex", flexDirection:"column" })}>
+                    {/* color stripe */}
+                    <div style={{ height:4, background:`linear-gradient(90deg,${hex},${hex}66)` }}/>
+                    <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", flex:1 }}>
+                      {/* badges */}
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8, flexWrap:"wrap" }}>
+                        <span style={{
+                          background:tc.bg, color:tc.color, border:`1px solid ${tc.border}`,
+                          borderRadius:20, padding:"2px 8px", fontSize:10, fontWeight:700,
+                        }}>
+                          {icon} {rec.tipe}
+                        </span>
+                        <span style={{
+                          background:`${hex}18`, color:hex,
+                          borderRadius:20, padding:"2px 8px", fontSize:10, fontWeight:700,
+                        }}>
+                          {rec.materi}
+                        </span>
+                      </div>
+
+                      {/* judul */}
+                      <div style={{ fontWeight:700, fontSize:13, marginBottom:8, lineHeight:1.4, color:"#1C1917" }}>
+                        {rec.judul}
+                      </div>
+
+                      {/* deskripsi */}
+                      <div style={{ fontSize:12, color:"#57534E", flexGrow:1, marginBottom:12, lineHeight:1.6 }}>
+                        {rec.deskripsi}
+                      </div>
+
+                      {/* tombol */}
+                      {rec.url ? (
+                        <a
+                          href={rec.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display:"block", textAlign:"center",
+                            background:`linear-gradient(135deg,${O},${OD})`,
+                            color:"#fff", borderRadius:10,
+                            padding:"8px 12px", fontSize:12, fontWeight:700,
+                            textDecoration:"none", boxShadow:`0 3px 10px ${O}33`,
+                          }}
+                        >
+                          Buka Sumber →
+                        </a>
+                      ) : (
+                        <div style={{
+                          textAlign:"center", background:"#F5F0EB", color:"#78716C",
+                          borderRadius:10, padding:"8px 12px", fontSize:12, fontWeight:600,
+                        }}>
+                          📖 Buku Referensi (Offline)
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )),
-              )}
+                );
+              })}
             </div>
-          </section>
+          </div>
         )}
 
-        {/* Actions */}
-        <section className="flex flex-col md:flex-row gap-lg pt-xl animate-fade-up">
-          <button
-            onClick={handleRetry}
-            className="neo-btn flex-1 bg-secondary text-black border-[4px] border-black py-lg px-xl neo-shadow-lg
-              flex items-center justify-center gap-md uppercase font-black"
-            style={{ borderRadius: 0 }}
-          >
-            <span className="material-symbols-outlined text-headline-md">
-              replay
-            </span>
-            <span className="font-display text-headline-md">
-              Ulangi Level {level}
-            </span>
-          </button>
-          <button
-            onClick={handleDashboard}
-            className="neo-btn flex-1 bg-tertiary-fixed text-black border-[4px] border-black py-lg px-xl neo-shadow-lg
-              flex items-center justify-center gap-md uppercase font-black"
-            style={{ borderRadius: 0 }}
-          >
-            <span className="material-symbols-outlined text-headline-md">
-              dashboard
-            </span>
-            <span className="font-display text-headline-md">
-              Pilih Level Lain
-            </span>
-          </button>
-        </section>
+        {/* Action Buttons */}
+        <div style={{ display:"flex", gap:16 }}>
+          <button onClick={handleRetry} style={{
+            flex:1, background:`linear-gradient(135deg,${O},${OD})`,
+            color:"#fff", border:"none", borderRadius:14,
+            padding:"16px 24px", fontSize:15, fontWeight:700,
+            cursor:"pointer", fontFamily:"inherit",
+            boxShadow:`0 6px 20px ${O}44`,
+            display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+          }}>↺ Ulangi Level {level}</button>
+          <button onClick={handleDashboard} style={{
+            flex:1, background:"#FFFCF9", color:OD,
+            border:`1.5px solid #FED7AA`, borderRadius:14,
+            padding:"16px 24px", fontSize:15, fontWeight:700,
+            cursor:"pointer", fontFamily:"inherit",
+            boxShadow:"0 2px 8px rgba(249,115,22,0.1)",
+            display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+          }}>⎗ Pilih Level Lain</button>
+        </div>
       </main>
 
-      <footer className="w-full py-4 border-t-4 border-black bg-surface-container mt-xl">
-        <p className="text-center font-label-sm text-label-sm text-on-surface-variant opacity-60">
-          © 2026 EUREKA QUIZ
-        </p>
+      <footer style={{
+        borderTop:"1.5px solid #F0E6DA", background:"#FFFCF9",
+        textAlign:"center", padding:"14px",
+        fontSize:12, color:"#A8956E", marginTop:32,
+      }}>
+        © 2026 Eureka Quiz
       </footer>
     </div>
   );

@@ -67,6 +67,7 @@ export function useQuiz() {
       const res = await submitQuiz(payload)
       // Simpan result dengan info level
       sessionStorage.setItem('quizml_result', JSON.stringify({ ...res.data, level }))
+      sessionStorage.setItem('quizLevel', level)
       navigate('/result', { state: { level } })
     } catch {
       setError('Gagal submit. Coba lagi.')

@@ -81,12 +81,11 @@ def submit_quiz():
         result_id = cur.lastrowid
 
         # 7. Simpan rekomendasi
-        for materi, rec in result['rekomendasi'].items():
-            for sumber in rec['sumber']:
-                cur.execute(
-                    "INSERT INTO recommendations (result_id, materi, judul, url, tipe) VALUES (%s,%s,%s,%s,%s)",
-                    (result_id, materi, sumber['judul'], sumber.get('url'), sumber['tipe'])
-                )
+        for rec in result['rekomendasi']:
+            cur.execute(
+                "INSERT INTO recommendations (result_id, materi, judul, url, tipe) VALUES (%s,%s,%s,%s,%s)",
+                (result_id, rec['materi'], rec['judul'], rec.get('url'), rec['tipe'])
+            )
         commit(conn)
 
         return jsonify({
@@ -104,6 +103,7 @@ def submit_quiz():
             'materi_terlemah':    result['materi_terlemah'],
             'kategori_kemampuan': result['kategori_kemampuan'],
             'rekomendasi':        result['rekomendasi'],
+            'analisis_detail':    result.get('analisis_detail', {}),
             'ringkasan':          result['ringkasan'],
             'waktu_detik':        waktu_detik,
         }), 201
