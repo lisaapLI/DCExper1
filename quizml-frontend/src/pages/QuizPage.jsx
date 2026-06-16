@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuiz } from '../hooks/useQuiz'
 import { formatTime } from '../utils/formatters'
@@ -16,6 +16,16 @@ export default function QuizPage() {
   const navigate = useNavigate()
   const user = JSON.parse(sessionStorage.getItem('quizml_user') || 'null')
   useEffect(() => { if (!user) navigate('/') }, [])
+
+  const [showWarning, setShowWarning] = useState(false)
+  const [showSidebar, setShowSidebar] = useState(false)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const handle = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handle)
+    return () => window.removeEventListener('resize', handle)
+  }, [])
 
   const {
     questions, currentQ, currentIndex, level,
@@ -38,11 +48,18 @@ export default function QuizPage() {
 
   const lvAccent = LEVEL_ACCENT[level] || LEVEL_ACCENT['Mudah']
 
+  const trySubmit = () => {
+    const unanswered = questions.length - answeredCount
+    if (unanswered > 0) {
+      setShowWarning(true)
+    } else {
+      handleSubmit()
+    }
+  }
+
   if (loading) return (
     <div style={{ minHeight:'100vh', background:'#FAFAF9', display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ textAlign:'center' }}>
-        <div style={{ fontSize:14, color:'#78716C', fontFamily:'Inter,sans-serif' }}>Memuat soal {level}...</div>
-      </div>
+      <p style={{ fontFamily:'Inter,sans-serif', color:'#78716C', fontSize:14 }}>Memuat soal {level}...</p>
     </div>
   )
 
@@ -60,36 +77,82 @@ export default function QuizPage() {
 
   const selected = answers[currentQ.id]
   const isLast   = currentIndex === questions.length - 1
-  const answeredList = questions.map(q => !!answers[q.id])
   const unansweredCount = questions.length - answeredCount
-
   const choiceMap = { A: currentQ.pilihan_a, B: currentQ.pilihan_b, C: currentQ.pilihan_c, D: currentQ.pilihan_d }
 
   return (
     <div style={s.root}>
+      {/* Warning Modal */}
+      {showWarning && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <div style={{ fontSize:40, marginBottom:12 }}>&#9888;&#65039;</div>
+            <h3 style={s.modalTitle}>Ada soal yang belum dijawab!</h3>
+            <p style={s.modalDesc}>
+              Kamu masih memiliki <b style={{ color:'#DC2626' }}>{unansweredCount} soal</b> yang belum dijawab.
+              Yakin ingin submit sekarang?
+            </p>
+            <div style={s.modalBtns}>
+              <button
+                onClick={() => { setShowWarning(false) }}
+                style={s.btnModalBack}
+              >
+                &#128221; Kerjakan Dulu
+              </button>
+              <button
+                onClick={() => { setShowWarning(false); handleSubmit() }}
+                disabled={submitting}
+                style={s.btnModalSubmit}
+              >
+                {submitting ? 'Menganalisis...' : 'Lanjut Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TopBar */}
       <header style={s.topbar}>
         <div style={s.topbarInner}>
           <div style={s.topbarLeft}>
             <span style={s.logoText}>&#127891; Eureka Quiz</span>
-            <span style={{ ...s.badge, background: lvAccent.bg, color: lvAccent.color }}>
-              {level}
-            </span>
+            <span style={{ ...s.badge, background: lvAccent.bg, color: lvAccent.color }}>{level}</span>
           </div>
           <div style={s.topbarRight}>
-            <span style={s.userName}>{user?.nama}</span>
+            {!isMobile && <span style={s.userName}>{user?.nama}</span>}
             <div style={s.timerBox}>&#9201; {formatTime(elapsedSeconds)}</div>
+            {isMobile && (
+              <button onClick={() => setShowSidebar(true)} style={s.btnSidebarToggle}>
+                &#128221; {answeredCount}/{questions.length}
+              </button>
+            )}
           </div>
         </div>
       </header>
 
+      {/* Mobile Sidebar Drawer */}
+      {isMobile && showSidebar && (
+        <div style={s.overlay} onClick={() => setShowSidebar(false)}>
+          <div style={s.drawer} onClick={e => e.stopPropagation()}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <span style={s.sidebarTitle}>Nomor Soal</span>
+              <button onClick={() => setShowSidebar(false)} style={s.btnClose}>&#10005;</button>
+            </div>
+            <SidebarContent
+              questions={questions} answers={answers} currentIndex={currentIndex}
+              answeredCount={answeredCount} unansweredCount={unansweredCount}
+              jumpToQuestion={(i) => { jumpToQuestion(i); setShowSidebar(false) }}
+              trySubmit={trySubmit} submitting={submitting} isLast={isLast}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Body */}
-      <div style={s.body}>
+      <div style={{ ...s.body, gridTemplateColumns: isMobile ? '1fr' : '1fr 220px' }}>
 
         {/* Konten Soal */}
         <div style={s.content}>
-
-          {/* Info soal */}
           <div style={s.soalMeta}>
             <div style={s.metaLeft}>
               {currentQ.materi && <span style={s.materiBadge}>{currentQ.materi}</span>}
@@ -98,17 +161,14 @@ export default function QuizPage() {
             <span style={s.soalNum}>Soal {currentIndex + 1} / {questions.length}</span>
           </div>
 
-          {/* Progress bar */}
           <div style={s.progressBg}>
             <div style={{ ...s.progressFill, width: `${(answeredCount / questions.length) * 100}%` }} />
           </div>
 
-          {/* Teks soal */}
           <div style={s.soalCard}>
             <p style={s.soalText}>{currentQ.soal}</p>
           </div>
 
-          {/* Pilihan jawaban */}
           <div style={s.pilihanList}>
             {CHOICES.map((choice) => {
               const isSelected = selected === choice
@@ -127,9 +187,7 @@ export default function QuizPage() {
                     ...s.choiceKey,
                     background: isSelected ? '#F97316' : '#F5F5F4',
                     color: isSelected ? '#FFFFFF' : '#78716C',
-                  }}>
-                    {choice}
-                  </span>
+                  }}>{choice}</span>
                   <span style={{ ...s.choiceText, fontWeight: isSelected ? 600 : 400, color: isSelected ? '#EA580C' : '#1C1917' }}>
                     {choiceMap[choice]}
                   </span>
@@ -139,7 +197,6 @@ export default function QuizPage() {
             })}
           </div>
 
-          {/* Navigasi bawah */}
           <div style={s.navRow}>
             <button
               onClick={prevQuestion}
@@ -149,17 +206,14 @@ export default function QuizPage() {
               &#8592; Sebelumnya
             </button>
 
-            <span style={s.hintText}>
-              Tekan <b>A B C D</b> atau <b>&#8592; &#8594;</b>
-            </span>
+            {!isMobile && (
+              <span style={s.hintText}>Tekan <b>A B C D</b> atau <b>&#8592; &#8594;</b></span>
+            )}
 
             {isLast ? (
-              <button
-                onClick={handleSubmit}
-                disabled={submitting}
-                style={{ ...s.btnOrange, opacity: submitting ? 0.7 : 1 }}
-              >
-                {submitting ? 'Menganalisis...' : 'Submit Quiz \u2713'}
+              <button onClick={trySubmit} disabled={submitting}
+                style={{ ...s.btnOrange, opacity: submitting ? 0.7 : 1 }}>
+                {submitting ? 'Menganalisis...' : 'Submit Quiz &#10003;'}
               </button>
             ) : (
               <button onClick={nextQuestion} style={s.btnOrange}>
@@ -167,88 +221,78 @@ export default function QuizPage() {
               </button>
             )}
           </div>
+
+          {/* Submit button mobile (muncul selalu di bawah) */}
+          {isMobile && (
+            <button onClick={trySubmit} disabled={submitting}
+              style={{ ...s.btnOrangeFull, opacity: submitting ? 0.7 : 1 }}>
+              {submitting ? 'Menganalisis...' : `Submit Quiz (${answeredCount}/${questions.length})`}
+            </button>
+          )}
         </div>
 
-        {/* Sidebar Nomor Soal */}
-        <aside style={s.sidebar}>
-          <div style={s.sidebarHeader}>
-            <span style={s.sidebarTitle}>Nomor Soal</span>
-            <span style={s.sidebarCount}>{answeredCount}/{questions.length}</span>
-          </div>
-
-          {/* Legend */}
-          <div style={s.legend}>
-            <div style={s.legendItem}>
-              <span style={{ ...s.legendDot, background:'#F97316' }} /> Aktif
+        {/* Sidebar Desktop */}
+        {!isMobile && (
+          <aside style={s.sidebar}>
+            <div style={s.sidebarHeader}>
+              <span style={s.sidebarTitle}>Nomor Soal</span>
+              <span style={s.sidebarCount}>{answeredCount}/{questions.length}</span>
             </div>
-            <div style={s.legendItem}>
-              <span style={{ ...s.legendDot, background:'#FED7AA' }} /> Dijawab
-            </div>
-            <div style={s.legendItem}>
-              <span style={{ ...s.legendDot, background:'#F5F5F4' }} /> Belum
-            </div>
-          </div>
-
-          {/* Grid nomor */}
-          <div style={s.dotGrid}>
-            {questions.map((q, i) => {
-              const isActive   = i === currentIndex
-              const isAnswered = !!answers[q.id]
-              return (
-                <button
-                  key={q.id}
-                  onClick={() => jumpToQuestion(i)}
-                  title={`Soal ${i + 1}${isAnswered ? ' (sudah dijawab)' : ''}`}
-                  style={{
-                    ...s.dotBtn,
-                    background: isActive ? '#F97316' : isAnswered ? '#FED7AA' : '#F5F5F4',
-                    color: isActive ? '#FFFFFF' : isAnswered ? '#EA580C' : '#78716C',
-                    border: isActive ? '2px solid #EA580C' : isAnswered ? '2px solid #FED7AA' : '2px solid #E7E5E4',
-                    fontWeight: isActive ? 700 : isAnswered ? 600 : 400,
-                    boxShadow: isActive ? '0 2px 8px #F9731644' : 'none',
-                  }}
-                >
-                  {i + 1}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Ringkasan */}
-          <div style={s.sidebarSummary}>
-            <div style={s.summaryRow}>
-              <span style={s.summaryLabel}>Dijawab</span>
-              <span style={{ ...s.summaryVal, color:'#16A34A' }}>{answeredCount}</span>
-            </div>
-            <div style={s.summaryRow}>
-              <span style={s.summaryLabel}>Belum</span>
-              <span style={{ ...s.summaryVal, color:'#DC2626' }}>{unansweredCount}</span>
-            </div>
-          </div>
-
-          {/* Tombol submit di sidebar */}
-          {isLast && (
-            <button
-              onClick={handleSubmit}
-              disabled={submitting}
-              style={{ ...s.btnOrangeFull, marginTop:16, opacity: submitting ? 0.7 : 1 }}
-            >
-              {submitting ? 'Menganalisis...' : 'Submit Quiz \u2713'}
-            </button>
-          )}
-
-          {unansweredCount === 0 && !isLast && (
-            <button
-              onClick={handleSubmit}
-              disabled={submitting}
-              style={{ ...s.btnOrangeFull, marginTop:16, opacity: submitting ? 0.7 : 1 }}
-            >
-              {submitting ? 'Menganalisis...' : 'Selesai & Submit'}
-            </button>
-          )}
-        </aside>
+            <SidebarContent
+              questions={questions} answers={answers} currentIndex={currentIndex}
+              answeredCount={answeredCount} unansweredCount={unansweredCount}
+              jumpToQuestion={jumpToQuestion}
+              trySubmit={trySubmit} submitting={submitting} isLast={isLast}
+            />
+          </aside>
+        )}
       </div>
     </div>
+  )
+}
+
+function SidebarContent({ questions, answers, currentIndex, answeredCount, unansweredCount, jumpToQuestion, trySubmit, submitting, isLast }) {
+  return (
+    <>
+      <div style={s.legend}>
+        <div style={s.legendItem}><span style={{ ...s.legendDot, background:'#F97316' }} /> Aktif</div>
+        <div style={s.legendItem}><span style={{ ...s.legendDot, background:'#FED7AA' }} /> Dijawab</div>
+        <div style={s.legendItem}><span style={{ ...s.legendDot, background:'#F5F5F4' }} /> Belum</div>
+      </div>
+      <div style={s.dotGrid}>
+        {questions.map((q, i) => {
+          const isActive   = i === currentIndex
+          const isAnswered = !!answers[q.id]
+          return (
+            <button key={q.id} onClick={() => jumpToQuestion(i)}
+              style={{
+                ...s.dotBtn,
+                background: isActive ? '#F97316' : isAnswered ? '#FED7AA' : '#F5F5F4',
+                color: isActive ? '#FFFFFF' : isAnswered ? '#EA580C' : '#78716C',
+                border: isActive ? '2px solid #EA580C' : isAnswered ? '2px solid #FED7AA' : '2px solid #E7E5E4',
+                fontWeight: isActive ? 700 : isAnswered ? 600 : 400,
+                boxShadow: isActive ? '0 2px 8px #F9731644' : 'none',
+              }}>
+              {i + 1}
+            </button>
+          )
+        })}
+      </div>
+      <div style={s.sidebarSummary}>
+        <div style={s.summaryRow}>
+          <span style={s.summaryLabel}>Dijawab</span>
+          <span style={{ ...s.summaryVal, color:'#16A34A' }}>{answeredCount}</span>
+        </div>
+        <div style={s.summaryRow}>
+          <span style={s.summaryLabel}>Belum</span>
+          <span style={{ ...s.summaryVal, color:'#DC2626' }}>{unansweredCount}</span>
+        </div>
+      </div>
+      <button onClick={trySubmit} disabled={submitting}
+        style={{ ...s.btnOrangeFull, marginTop:16, opacity: submitting ? 0.7 : 1 }}>
+        {submitting ? 'Menganalisis...' : 'Submit Quiz'}
+      </button>
+    </>
   )
 }
 
@@ -258,29 +302,65 @@ const OD = '#EA580C'
 const s = {
   root: { minHeight:'100vh', background:'#FAFAF9', fontFamily:"'Inter',sans-serif", color:'#1C1917' },
 
+  overlay: {
+    position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100,
+    display:'flex', alignItems:'center', justifyContent:'center', padding:16,
+  },
+  modal: {
+    background:'#FFFFFF', borderRadius:20, padding:'32px 28px', maxWidth:400, width:'100%',
+    textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.2)',
+  },
+  modalTitle: { fontSize:20, fontWeight:800, color:'#1C1917', margin:'0 0 12px' },
+  modalDesc: { fontSize:14, color:'#78716C', margin:'0 0 24px', lineHeight:1.6 },
+  modalBtns: { display:'flex', gap:12, flexWrap:'wrap' },
+  btnModalBack: {
+    flex:1, background:'#FFFFFF', color:'#1C1917', border:'1.5px solid #E7E5E4',
+    borderRadius:12, padding:'12px 16px', fontSize:14, fontWeight:700,
+    cursor:'pointer', fontFamily:'inherit', minWidth:120,
+  },
+  btnModalSubmit: {
+    flex:1, background:`linear-gradient(135deg, ${O}, ${OD})`, color:'#FFFFFF',
+    border:'none', borderRadius:12, padding:'12px 16px', fontSize:14, fontWeight:700,
+    cursor:'pointer', fontFamily:'inherit', minWidth:120,
+    boxShadow:`0 4px 12px ${O}44`,
+  },
+
+  drawer: {
+    position:'fixed', right:0, top:0, bottom:0, width:280,
+    background:'#FFFFFF', padding:20, overflowY:'auto',
+    boxShadow:'-4px 0 20px rgba(0,0,0,0.1)',
+  },
+  btnClose: {
+    background:'#F5F5F4', border:'none', borderRadius:8, width:32, height:32,
+    cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center',
+  },
+  btnSidebarToggle: {
+    background:'#FFF7ED', border:'1.5px solid #FED7AA', borderRadius:8,
+    padding:'5px 10px', fontSize:12, fontWeight:700, color:'#EA580C', cursor:'pointer',
+    fontFamily:'inherit',
+  },
+
   topbar: {
     background:'#FFFFFF', borderBottom:'1.5px solid #E7E5E4',
-    padding:'10px 24px', position:'sticky', top:0, zIndex:50,
+    padding:'10px 16px', position:'sticky', top:0, zIndex:50,
     boxShadow:'0 1px 4px rgba(0,0,0,0.05)',
   },
   topbarInner: { maxWidth:1280, margin:'0 auto', display:'flex', justifyContent:'space-between', alignItems:'center' },
-  topbarLeft: { display:'flex', alignItems:'center', gap:12 },
-  logoText: { fontSize:18, fontWeight:800, letterSpacing:'-0.4px' },
-  badge: { padding:'3px 10px', borderRadius:20, fontSize:12, fontWeight:700 },
-  topbarRight: { display:'flex', alignItems:'center', gap:12 },
+  topbarLeft: { display:'flex', alignItems:'center', gap:8 },
+  logoText: { fontSize:16, fontWeight:800, letterSpacing:'-0.4px' },
+  badge: { padding:'3px 8px', borderRadius:20, fontSize:11, fontWeight:700 },
+  topbarRight: { display:'flex', alignItems:'center', gap:8 },
   userName: { fontSize:13, color:'#78716C' },
   timerBox: {
     background:'#FFF7ED', border:'1.5px solid #FED7AA', borderRadius:8,
-    padding:'5px 12px', fontSize:13, fontWeight:700, color:'#EA580C',
+    padding:'5px 10px', fontSize:13, fontWeight:700, color:'#EA580C',
   },
 
   body: {
-    maxWidth:1280, margin:'0 auto', padding:'24px 24px 60px',
-    display:'grid', gridTemplateColumns:'1fr 220px', gap:24, alignItems:'start',
+    maxWidth:1280, margin:'0 auto', padding:'16px 16px 60px',
+    display:'grid', gap:20, alignItems:'start',
   },
-
-  content: { display:'flex', flexDirection:'column', gap:16 },
-
+  content: { display:'flex', flexDirection:'column', gap:14 },
   soalMeta: { display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 },
   metaLeft: { display:'flex', gap:8, flexWrap:'wrap' },
   materiBadge: {
@@ -292,19 +372,16 @@ const s = {
     padding:'3px 10px', fontSize:11, fontWeight:700, color:'#16A34A',
   },
   soalNum: { fontSize:13, color:'#78716C', fontWeight:600 },
-
   progressBg: { height:6, background:'#E7E5E4', borderRadius:99, overflow:'hidden' },
   progressFill: { height:'100%', background:`linear-gradient(90deg, ${O}, ${OD})`, borderRadius:99, transition:'width 0.4s' },
-
   soalCard: {
     background:'#FFFFFF', border:'1.5px solid #E7E5E4', borderRadius:14,
-    padding:'24px 28px', boxShadow:'0 2px 8px rgba(0,0,0,0.04)',
+    padding:'20px 20px', boxShadow:'0 2px 8px rgba(0,0,0,0.04)',
   },
   soalText: { fontSize:15, lineHeight:1.75, margin:0 },
-
   pilihanList: { display:'flex', flexDirection:'column', gap:10 },
   choiceBtn: {
-    display:'flex', alignItems:'center', gap:12, padding:'12px 16px',
+    display:'flex', alignItems:'center', gap:12, padding:'12px 14px',
     borderStyle:'solid', borderRadius:12, cursor:'pointer',
     textAlign:'left', transition:'all 0.15s', fontFamily:'inherit',
     boxShadow:'0 1px 4px rgba(0,0,0,0.04)',
@@ -316,22 +393,27 @@ const s = {
   },
   choiceText: { fontSize:14, lineHeight:1.4, flex:1 },
   checkmark: { fontSize:14, color:'#F97316', fontWeight:700, marginLeft:'auto', flexShrink:0 },
-
   navRow: {
     display:'flex', justifyContent:'space-between', alignItems:'center',
-    paddingTop:8, flexWrap:'wrap', gap:12,
+    paddingTop:4, flexWrap:'wrap', gap:10,
   },
   hintText: { fontSize:12, color:'#A8A29E', textAlign:'center' },
   btnGhost: {
     background:'#FFFFFF', color:'#1C1917', border:'1.5px solid #E7E5E4',
-    borderRadius:10, padding:'10px 20px', fontSize:14, fontWeight:600,
+    borderRadius:10, padding:'10px 16px', fontSize:14, fontWeight:600,
     cursor:'pointer', fontFamily:'inherit',
   },
   btnOrange: {
     background:`linear-gradient(135deg, ${O}, ${OD})`, color:'#FFFFFF',
-    border:'none', borderRadius:10, padding:'10px 24px',
+    border:'none', borderRadius:10, padding:'10px 20px',
     fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
     boxShadow:`0 3px 12px ${O}44`,
+  },
+  btnOrangeFull: {
+    width:'100%', background:`linear-gradient(135deg, ${O}, ${OD})`, color:'#FFFFFF',
+    border:'none', borderRadius:10, padding:'12px 0',
+    fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
+    boxShadow:`0 3px 12px ${O}44`, boxSizing:'border-box',
   },
 
   sidebar: {
@@ -345,7 +427,7 @@ const s = {
     background:'#FFF7ED', border:'1px solid #FED7AA', borderRadius:20,
     padding:'2px 8px', fontSize:11, fontWeight:700, color:'#EA580C',
   },
-  legend: { display:'flex', gap:10, marginBottom:12, flexWrap:'wrap' },
+  legend: { display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' },
   legendItem: { display:'flex', alignItems:'center', gap:4, fontSize:11, color:'#78716C' },
   legendDot: { width:8, height:8, borderRadius:'50%', flexShrink:0 },
   dotGrid: { display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:6, marginBottom:16 },
@@ -361,10 +443,4 @@ const s = {
   summaryRow: { display:'flex', justifyContent:'space-between', alignItems:'center' },
   summaryLabel: { fontSize:12, color:'#78716C' },
   summaryVal: { fontSize:13, fontWeight:700 },
-  btnOrangeFull: {
-    width:'100%', background:`linear-gradient(135deg, ${O}, ${OD})`, color:'#FFFFFF',
-    border:'none', borderRadius:10, padding:'10px 0',
-    fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
-    boxShadow:`0 3px 12px ${O}44`,
-  },
 }
