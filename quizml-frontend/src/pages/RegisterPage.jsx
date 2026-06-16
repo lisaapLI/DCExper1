@@ -2,6 +2,21 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { register } from "../api/quizApi";
 
+function EyeIcon({ open }) {
+  return open ? (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#78716C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  ) : (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#78716C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+}
+
 export default function RegisterPage() {
   const navigate = useNavigate();
   const [form, setForm]         = useState({ nim:"", nama:"", password:"", confirm:"" });
@@ -119,11 +134,15 @@ export default function RegisterPage() {
                 <div style={s.field}>
                   <label style={s.label}>Password</label>
                   <div style={s.pwWrapper}>
-                    <input type={showPw ? "text" : "password"} placeholder="Min. 6 karakter"
-                      value={form.password} onChange={change("password")}
-                      style={{ ...s.input, marginBottom:0, borderRadius:12 }} />
+                    <input
+                      type={showPw ? "text" : "password"}
+                      placeholder="Min. 6 karakter"
+                      value={form.password}
+                      onChange={change("password")}
+                      style={s.inputPw}
+                    />
                     <button type="button" onClick={() => setShowPw(v => !v)} style={s.eyeBtn}>
-                      {showPw ? "&#128064;" : "&#128065;"}
+                      <EyeIcon open={showPw} />
                     </button>
                   </div>
                   {errors.password && <p style={s.fieldError}>{errors.password}</p>}
@@ -132,12 +151,16 @@ export default function RegisterPage() {
                 <div style={s.field}>
                   <label style={s.label}>Konfirmasi Password</label>
                   <div style={s.pwWrapper}>
-                    <input type={showCf ? "text" : "password"} placeholder="Ulangi password"
-                      value={form.confirm} onChange={change("confirm")}
+                    <input
+                      type={showCf ? "text" : "password"}
+                      placeholder="Ulangi password"
+                      value={form.confirm}
+                      onChange={change("confirm")}
                       onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                      style={{ ...s.input, marginBottom:0, borderRadius:12 }} />
+                      style={s.inputPw}
+                    />
                     <button type="button" onClick={() => setShowCf(v => !v)} style={s.eyeBtn}>
-                      {showCf ? "&#128064;" : "&#128065;"}
+                      <EyeIcon open={showCf} />
                     </button>
                   </div>
                   {errors.confirm && <p style={s.fieldError}>{errors.confirm}</p>}
@@ -226,10 +249,16 @@ const s = {
     fontSize:15, color:"#1C1917", outline:"none", background:"#fff",
     fontFamily:"inherit", width:"100%", boxSizing:"border-box",
   },
+  inputPw: {
+    border:"1.5px solid #E7E5E4", borderRadius:12, padding:"14px 48px 14px 16px",
+    fontSize:15, color:"#1C1917", outline:"none", background:"#fff",
+    fontFamily:"inherit", width:"100%", boxSizing:"border-box",
+  },
   pwWrapper: { position:"relative" },
   eyeBtn: {
     position:"absolute", right:12, top:"50%", transform:"translateY(-50%)",
-    background:"none", border:"none", cursor:"pointer", fontSize:18, padding:4,
+    background:"none", border:"none", cursor:"pointer", padding:4,
+    display:"flex", alignItems:"center", justifyContent:"center",
   },
   fieldError: { fontSize:13, color:"#DC2626", margin:"4px 0 0" },
   btn: {
